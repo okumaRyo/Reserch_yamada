@@ -1,5 +1,8 @@
 # %%
 # Python標準モジュール
+from IPython.display import HTML
+from pyvis.network import Network
+import networkx as nx
 from sklearn.metrics import recall_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import accuracy_score
@@ -26,7 +29,7 @@ import seaborn as sns
 header = ['Round', 'Hteam', 'Ateam', 'Hsocore', 'Ascore', 'HorA', 'WorL', 'Date', 'Wether',  'temperature', 'Grass_condition', 'Spectators', 'TimeLine1', 'TimeLine2', 'TimeLine3',
           'TimeLine4', 'TimeLine5', 'TimeLine6', 'Attack_CBP', 'Pass_CBP', 'Cross_CBP', 'Dribble_CBP', 'Shots_CBP', 'Score_CBP', 'Seizure', 'Diffence', 'Save_CBP', 'Expect_Goal',
           'Shots', 'Shots_Success', 'On_Target', 'PK', 'Pass', 'Pass_Success', 'Cross', 'Cross_Success', 'D_FK', 'I_FK', 'CK', 'Throwing', 'Throwing_Success', 'Dribble', 'Dribble_Success', 'Tackle', 'Tackle_Success', 'Clear', 'Intercept', 'OffSide', 'Yellow', 'Red', 'Approach_30m', 'Approach_Penalty', 'Attack_Num', 'Chances', 'Control', 'AGI', 'KAGI']
-stats = pd.read_csv('/Users/okumaryo/Class/Laboratory/Twitter/fcryukyu_stats_.csv')
+stats = pd.read_csv('/Users/okumaryo/Class/Laboratory/Twitter/fcryukyu_stats_1.csv')
 #stats.set_index('Round', inplace=True)
 # stats = stats.T
 #stats.columns = header
@@ -153,45 +156,11 @@ stats['Control'] = stats['Control'].apply(lambda x: x.replace('%', '')).astype('
 # 標準化の処理の実行（説明変数に対してのみ実行）
 sc = StandardScaler()
 
-# %%
-sc.fit(stats.iloc[:, :-1])
-sc_stats = pd.DataFrame(sc.transform(stats.iloc[:, :-1]))
-sc_stats.head()
-
-# %%
-sc_stats["Cons"] = stats["Cons"]
-sc_stats.columns = stats.columns
-sc_stats.head()
-# %%
-# データの分割
-
-sc_X = sc_stats.iloc[:, :-1].values
-sc_y = sc_stats.iloc[:, -1].values
-# 再現性や後の検討を考えてrandom_stateは指定しておくことがおすすめ
-sc_X_train, sc_X_test, sc_y_train, sc_y_test = train_test_split(
-    sc_X, sc_y, test_size=0.3, random_state=1)
-
-# データの分割を確認
-print("分割後のデータ")
-print(sc_X.shape)
-print(sc_X_train.shape)
-print(sc_X_test.shape)
-
-# %%
-reg_lr = LinearRegression()
-# 訓練データにモデルを適用する
-reg_lr.fit(sc_X_train, sc_y_train)
-
-
-sc_stats.shape
-
-# %%
-sc_stats
 
 # %%
 stats.isnull().sum()
 # %%
-drp = ['Hscore', 'Ascore', 'WorL']
+drp = ['Hscore', 'Ascore', 'Shots_Success', 'WorL']
 df_x = stats.drop(drp, axis=1)
 df_y = stats['WorL']
 df_x.head()
@@ -245,7 +214,7 @@ stats.describe()
 print(classification_report(test_y, pred_test, target_names=['0', '1'], digits=4))
 
 # %%
-knn = KNeighborsClassifier(n_neighbors=13)
+knn = KNeighborsClassifier(n_neighbors=44)
 knn.fit(train_x, train_y)
 
 # %%
@@ -292,5 +261,80 @@ best_k_range = k_range[index]
 print("「k="+str(best_k_range)+"」の時、正解率は最大値「"+str(max_accuracy)+"」をとる")
 
 # %%
-df_x
+# 特徴量のヒストグラム
+for col in df_x:
+    print(col)
+    df_x[col].plot.hist()
+    plt.show()
+# %%
+# 2変数間の散布図
+plt.figure(figsize=(10, 10))
+sns.scatterplot(data=stats, x="Attack_CBP", y="WorL")
+
+# %%
+stats['WorL'].nunique
+
+# %%
+# ヒートマップ(相関図)
+plt.figure(figsize=(10, 10))
+options = {'square': True, 'annot': True, 'fmt': '0.2f', 'xticklabels': stats.columns,
+           'yticklabels': stats.columns, 'annot_kws': {'size': 5}, 'vmin': -1, 'vmax': 1, 'center': 0, 'cbar': False}
+ax = sns.heatmap(stats.corr(), **options)
+ax.tick_params(axis='x', labelsize=6)
+ax.tick_params(axis='y', labelsize=6)
+# %%
+# グラフネットワーク
+
+threshold = 0.3
+edge_width = 10
+
+stats_corr = stats.corr()
+mask_stats = stats_corr.mask(np.triu(np.ones(stats_corr.shape)).astype(
+    bool), None)  # 「右上の三角行列」にマスクをして、Noneに置き換える
+mask_stats
+# %%
+# edges data frame
+edges = mask_stats.stack().reset_index().rename(
+    columns={"level_0": "source", "level_1": "target", 0: "weight", })
+edges
+# %%
+edges = edges.loc[abs(edges['weight']) > threshold]  # 該当のノードのみ出したい場合コメントアウト外す
+edges['width'] = edges['weight'].apply(lambda x: abs(
+    x) * edge_width if abs(x) > threshold else 0)  # weightに応じて、エッジの太さを変更
+edges['color'] = edges['weight'].apply(
+    lambda x: '#33A5CC' if x > threshold else '#BD4141')  # edgeの色
+edges['label'] = edges['weight'].apply(lambda x: np.round(x, 2) if abs(x) > threshold else '')
+edges
+# %%
+# networkxからpyvisに変換
+G = nx.from_pandas_edgelist(edges, edge_attr=True)
+nt = Network(height=f'1000px', width=f'1000px', bgcolor="#FFFFFF", font_color="black",
+             notebook=True, directed=False)  # heading='test graph',
+nt.from_nx(G)
+nt
+# グラフ構造
+nt.repulsion(node_distance=300)
+nt.edges
+# %%
+# ノードのレイアウト
+neighbor_map = nt.get_adj_list()
+neighbor_map
+
+# %%
+for n in nt.nodes:
+    n['font'] = {'size': 20, 'strokeWidth': 6}
+    n['size'] = 15  # shapeの内部にラベルがないノード形状のサイズ
+
+# エッジのレイアウト
+for e in nt.edges:
+    if e['width'] >= threshold:
+        e['font'] = {'size': 30, 'strokeWidth': 30, 'color': '#33A5CC'}  # strokeWidth: weightの背景範囲
+    else:
+        e['font'] = {'size': 30, 'strokeWidth': 10, 'color': '#BD4141'}
+
+nt.show_buttons(filter_=['physics'])
+nt.show("tmp.html")
+display(HTML("tmp.html"))
+
+# %%
 # %%

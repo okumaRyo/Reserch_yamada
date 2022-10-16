@@ -90,4 +90,4 @@ comment = [rounds, Hteam, Ateam, Hscore, Ascore, h_or_a, WorL, game_date, wether
         for j in range(len(header)):
             test.append(comment[j][i])
         writer.writerow(test) '''
-print(comment[1][1])
+print(header)

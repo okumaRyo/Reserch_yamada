@@ -7,30 +7,36 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.options import Options
 
+header = ['Hteam', 'Ateam', 'Hscore', 'Ascore', 'WorL',
+          'Preview', 'Review', 'H_comment', 'A_comment']
 home = []
 away = []
 home_score = []
 away_score = []
 midokoro = []
 review = []
-h_coment = []
-a_coment = []
+h_comment = []
+a_comment = []
 winlose = []
 sokuhou = []
-coment = [home, away, home_score, away_score, winlose, midokoro, review, h_coment, a_coment]
+comment = [home, away, home_score, away_score, winlose, midokoro, review, h_comment, a_comment]
+links = ['https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2019&section=',
+         'https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2020&section=',
+         'https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2021&section=',
+         'https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2022&section=']
 
 
 def set_window(driver, n):
     move_first_game = driver.find_element(By.ID, "day_month")
     sel_move_first_game = Select(move_first_game)
     sel_move_first_game.select_by_value(str(n))
-    time.sleep(1)
+    time.sleep(1.5)
     clk_first_game = driver.find_element(By.ID, "day_s_btn")
     clk_first_game.click()
-    time.sleep(1)
+    time.sleep(1.5)
 
 
-def get_coment(driver, n):
+def get_comment(driver, n):
     x = 0
     s = ""
     game_num = 0
@@ -40,7 +46,9 @@ def get_coment(driver, n):
     # 第1節の試合結果画面
     game_rounds = driver.find_element(
         By.CSS_SELECTOR, "body > div.content > div.main > section > section")
-    for game_round in game_rounds.find_elements(By.TAG_NAME, 'section'):
+    a = game_rounds.find_elements(By.TAG_NAME, 'section')
+    b = [i for i in a]
+    for game_round in b:
 
         if game_num == switch_num:
             games = game_round.find_element(By.CLASS_NAME, 'match')
@@ -55,7 +63,7 @@ def get_coment(driver, n):
             driver.execute_script("window.open('');")
             driver.switch_to.window(driver.window_handles[1])
             driver.get(str(r))
-            time.sleep(1)
+            time.sleep(1.5)
 
             g1_H_score = driver.find_element(By.CLASS_NAME, "leagLeftScore")
             # print(f"Home_Score is {g1_H_score.text}")
@@ -86,31 +94,31 @@ def get_coment(driver, n):
                 spot = live.find_element(By.CSS_SELECTOR, 'div.spotRightTxt')
                 sokuhou.append(spot.text)
             print(sokuhou)
-            time.sleep(1) """
+            time.sleep(1.5) """
             # 見どころのテキストを取得
             # print(winlose[-1])
             driver.find_element(By.CSS_SELECTOR,        # 見どころの表示クリック
                                 "body > div.content.clearfix > div.main > section > nav.tabNavArea.matchTimeLineNav > ul > li:nth-child(1)").click()
-            time.sleep(1)
+            time.sleep(1.5)
             g1_midokoro = WebDriverWait(driver, 10).until(lambda x: x.find_element(
                 By.XPATH, '//*[@id="loadArea"]/section[1]/div[2]'))
             g1_midokoro = g1_midokoro.text
 
             # print(f'[見どころ] {g1_midokoro.text}')
-            time.sleep(1)
+            time.sleep(1.5)
             # 試合後のテキストを取得
             driver.find_element(
                 By.CSS_SELECTOR, 'body > div.content.clearfix > div.main > section > nav.tabNavArea.matchTimeLineNav > ul > li:nth-child(3)').click()
-            time.sleep(1)
+            time.sleep(1.5)
             g1_report = WebDriverWait(driver, 10).until(lambda x: x.find_element(       # レビューのテキストを取得
                 By.CSS_SELECTOR, '#loadArea > section > div.warDataTxt'))
             g1_report = g1_report.text
             # print(f'[レビュー] {g1_report.text}')
-            time.sleep(1)
+            time.sleep(1.5)
             # 監督コメントの取得
             driver.find_element(
                 By.CSS_SELECTOR, 'body > div.content.clearfix > div.main > section > nav:nth-child(8) > ul > li:nth-child(2)').click()
-            time.sleep(1)
+            time.sleep(1.5)
             g1_H_cmnt = WebDriverWait(driver, 10).until(                                # ホーム監督のコメント
                 lambda x: x.find_element(By.XPATH, '//*[@id="loadArea"]/div/div[1]/p'))
             g1_H_cmnt = g1_H_cmnt.text
@@ -120,24 +128,26 @@ def get_coment(driver, n):
             # print(f'[Home監督コメント] {g1_H_cmnt.text}\n[Away監督コメント] {g1_A_cmnt.text}')
             midokoro.append(g1_midokoro.strip())
             review.append(g1_report.strip())
-            h_coment.append(g1_H_cmnt.strip())
-            a_coment.append(g1_A_cmnt.strip())
+            h_comment.append(g1_H_cmnt.strip())
+            a_comment.append(g1_A_cmnt.strip())
             game_num += 1
-            if game_num >= 35:
+            if game_num >= 42:
                 game_num = 50
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
-            time.sleep(1)
+            time.sleep(1.5)
             # print(f'{x}{H_team}vs{A_team}{game_round}')
 
-            time.sleep(1)
+            time.sleep(1.5)
         elif game_num < switch_num:
             break
         switch_num += 1
+        print(switch_num)
     """ for i in midokoro:
         print(f'{i}\n-----------------------------')
         f.write(f'__{i}__\n') """
-    # print(f'<Home>\n{home}\n<Away>\n{away}\n<見どころ>\n{midokoro}\n<レビュー>\n{review}\n<ホームコメント>\n{h_coment}\n<アウェイコメント>\n{a_coment}')
+
+    # print(f'<Home>\n{home}\n<Away>\n{away}\n<見どころ>\n{midokoro}\n<レビュー>\n{review}\n<ホームコメント>\n{h_comment}\n<アウェイコメント>\n{a_comment}')
     # print(midokoro)
 
 
@@ -145,15 +155,20 @@ if __name__ == "__main__":
     n = 2
     time_start = time.time()
     options = Options()
-    # options.add_argument('--headless')        # ヘッドレス
+    options.add_argument('--headless')        # ヘッドレス
     driver = webdriver.Chrome(options=options)
     driver.maximize_window()                    # 画面最大化
-    driver.get("https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2022&section=")
-    time.sleep(1)
-    get_coment(driver, n)
-    with open('fcryukyu2022.csv', 'w', newline='') as f:
+    driver.get("https://www.jleague.jp/match/search/?category%5B%5D=j2&club%5B%5D=ryukyu&year=2019&section=")
+    time.sleep(1.5)
+    get_comment(driver, n)
+    with open('fcryukyu_comment.csv', 'a', newline='') as f:
         writer = csv.writer(f)
-        writer.writerows(coment)
+        writer.writerow(header)
+        for i in range(len(home)):
+            test = []
+            for j in range(len(header)):
+                test.append(comment[j][i])
+            writer.writerow(test)
     time_end = time.time()
     print(f"処理時間{time_end - time_start}")
     driver.quit()

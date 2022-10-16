@@ -135,14 +135,14 @@ def get_header(driver, n):
                     elif int(Hscore[-1]) < int(Ascore[-1]):
                         WorL.append(3)
                     else:
-                        WorL.append(0)
+                        WorL.append(1)
                 else:                                       # ホームの場合の勝敗判定
                     if int(Hscore[-1]) < int(Ascore[-1]):
                         WorL.append(0)
                     elif int(Hscore[-1]) > int(Ascore[-1]):
                         WorL.append(3)
                     else:
-                        WorL.append(0)
+                        WorL.append(1)
             counter += 1
         counter = 0
         time.sleep(1)
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     get_header(driver, n)
     ''' for i in range(len(header)):
         comment[i].insert(0, header[i]) '''
-    with open('fcryukyu_stats_.csv', 'w', newline='') as f:
+    with open('fcryukyu_stats_1.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(header)
         for i in range(165):
