@@ -1,3 +1,4 @@
 {
-    "python.pythonPath": "/Users/okumaryo/.pyenv/shims/python"
+    "python.pythonPath": "/Users/okumaryo/.pyenv/shims/python",
+    "python.analysis.typeCheckingMode": "basic"
 }
