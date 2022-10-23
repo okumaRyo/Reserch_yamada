@@ -39,7 +39,7 @@ stats.head()
 # stats['HorA'].replace(['A', 'H'], [0, 1], inplace=True)
 # 天候による影響度(改善の余地あり)
 stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨', '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴', '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴'], [
-                        1, 1, 0.9, 0.9, 0.9, 0.85, 0.85, 0.85, 0.5, 0.5, 0.5, 0.75, 0.35, 0.35, 0.35, 0.2, 0.2, 0.2, 0.15, 0.15, 0.15, 0, 0.1], inplace=True)
+                        1, 1, 1, 1, 1, 0.75, 0.75, 0.75, 0.5, 0.5, 0.5, 0.75, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0, 0], inplace=True)
 stats['Grass_condition'].replace(['全面良芝', '良芝'], [1.0, 0.75], inplace=True)
 stats['Date'] = stats['Date'].str.strip('Kick Off')
 stats['Spectators'] = stats['Spectators'].str.strip('人')
@@ -69,7 +69,7 @@ stats.drop(columns=['Hteam', 'Ateam', 'Date'], inplace=True)
 stats.head()
 
 # %%
-stats.shape
+stats.describe()
 
 # %%
 # ホームの場合の得点
@@ -86,6 +86,7 @@ AScore.rename(columns={'Ascore': 'Score'}, inplace=True)
 AScore.head()
 
 # %%
+# 得点を結合
 Score = pd.concat([HScore, AScore], axis=0)
 Score.head()
 
@@ -97,13 +98,13 @@ stats.head()
 stats.shape
 
 # %%
-# ホームの場合の得点
+# アウェイの場合の失点
 ACons = pd.DataFrame(stats[stats['HorA'] == 0])
 ACons = ACons.iloc[:, 0:1]
 ACons.rename(columns={'Hscore': 'Cons'}, inplace=True)
 ACons.head()
 # %%
-# アウェイの場合の得点
+# ホームの場合の失点
 HCons = pd.DataFrame(stats[stats['HorA'] == 1])
 HCons = HCons.iloc[:, [0, 1]]
 HCons.drop(columns='Hscore', inplace=True)
@@ -123,15 +124,8 @@ stats.dtypes
 # %%
 # 型変換
 stats['Spectators'] = stats['Spectators'].apply(lambda x: x.replace(',', '')).astype('int')
-
 stats['Spectators'].head()
-
-# %%
 stats['temperature'] = stats['temperature'].astype('float')
-
-# %%
-stats.head()
-# %%
 stats['TimeLine1'] = stats['TimeLine1'].apply(lambda x: x.replace('%', '')).astype('float')
 stats['TimeLine2'] = stats['TimeLine2'].apply(lambda x: x.replace('%', '')).astype('float')
 stats['TimeLine3'] = stats['TimeLine3'].apply(lambda x: x.replace('%', '')).astype('float')
@@ -151,16 +145,16 @@ stats['Chances'] = stats['Chances'].apply(lambda x: x.replace('%', '')).astype('
 stats['Control'] = stats['Control'].apply(lambda x: x.replace('%', '')).astype('float')
 
 # %%
-# ライブラリーのインポート
-
 # 標準化の処理の実行（説明変数に対してのみ実行）
 sc = StandardScaler()
 
-
 # %%
+# 欠損値の有無確認
 stats.isnull().sum()
 # %%
-drp = ['Hscore', 'Ascore', 'Shots_Success', 'WorL']
+# 統計データ処理に不要な特徴の削除
+drp = ['Hscore', 'Ascore', 'Shots_Success', 'WorL', 'Wether',
+       'Grass_condition', 'Intercept', 'OffSide', 'Yellow', 'Red', 'Tackle_Success']
 df_x = stats.drop(drp, axis=1)
 df_y = stats['WorL']
 df_x.head()
@@ -171,53 +165,25 @@ sc_df_x = pd.DataFrame(sc.transform(df_x))
 sc_df_x.columns = df_x.columns
 sc_df_x.head()
 # %%
-train_x, test_x, train_y, test_y = train_test_split(sc_df_x, df_y, test_size=0.3, random_state=2)
+df_x
+# %%
+# 訓練データとテストデータにスプリット
+train_x, test_x, train_y, test_y = train_test_split(
+    sc_df_x, df_y, test_size=0.3, random_state=2, stratify=df_y)
+# train_x, test_x, train_y, test_y = sc_df_x[:115], sc_df_x[115:], df_y[:115], df_y[115:]
 print("分割後のデータ")
 print(train_x.shape)
 print(test_x.shape)
 print(train_y.shape)
 print(test_y.shape)
+print(np.bincount(df_y))
 
 # %%
-df_coef = pd.DataFrame(model.coef_)
-df_coef
+df_y.nunique()
 # %%
-#model = linear_model.Lasso(alpha=0.1)
-model = svm.LinearSVC(max_iter=10000, random_state=83)
-
-model.fit(train_x, train_y)
-pred_train = model.predict(train_x)
-pred_test = model.predict(test_x)
-
-# %%
-df_coef = pd.DataFrame(model.coef_)
-df_coef.index = train_x.columns
-df_coef.style.bar()
-
-# %%
-rmse = np.sqrt(mean_squared_error(test_y, pred_test))
-rmse
-# %%
-stats
-
-# %%
-df_x = stats.drop(drp, axis=1)
-df_x
-
-# %%
-print('R^2 学習: %.2f, テスト: %.2f' % (
-    r2_score(train_y, pred_train),  # 学習
-    r2_score(test_y, pred_test)    # テスト
-))
-# %%
-stats.describe()
-print(classification_report(test_y, pred_test, target_names=['0', '1'], digits=4))
-
-# %%
-knn = KNeighborsClassifier(n_neighbors=44)
+# k近傍法
+knn = KNeighborsClassifier(n_neighbors=8)
 knn.fit(train_x, train_y)
-
-# %%
 knn_y_pred = knn.predict(test_x)
 # %%
 # 性能評価
@@ -226,7 +192,7 @@ print("適合率: " + str(round(precision_score(test_y, knn_y_pred, average="mac
 print("再現率: " + str(round(recall_score(test_y, knn_y_pred, average="macro"), 3)))
 
 # %%
-
+# 最適なkの値を調べる
 accuracy = []
 precision = []
 recall = []
@@ -277,9 +243,9 @@ stats['WorL'].nunique
 # %%
 # ヒートマップ(相関図)
 plt.figure(figsize=(10, 10))
-options = {'square': True, 'annot': True, 'fmt': '0.2f', 'xticklabels': stats.columns,
-           'yticklabels': stats.columns, 'annot_kws': {'size': 5}, 'vmin': -1, 'vmax': 1, 'center': 0, 'cbar': False}
-ax = sns.heatmap(stats.corr(), **options)
+options = {'square': True, 'annot': True, 'fmt': '0.2f', 'xticklabels': sc_df_x.columns,
+           'yticklabels': sc_df_x.columns, 'annot_kws': {'size': 5}, 'vmin': -1, 'vmax': 1, 'center': 0, 'cbar': False}
+ax = sns.heatmap(sc_df_x.corr(), **options)
 ax.tick_params(axis='x', labelsize=6)
 ax.tick_params(axis='y', labelsize=6)
 # %%
