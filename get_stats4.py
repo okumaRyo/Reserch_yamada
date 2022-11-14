@@ -76,22 +76,21 @@ class GetStats:
         self.j2_league = [self.url_iwate, self.url_vegalta, self.url_akita, self.url_yamagata, self.url_mito, self.url_tochigi, self.url_gunma, self.url_omiya, self.url_chiba,
                           self.url_verdy, self.url_machida, self.url_yokohama, self.url_kofu, self.url_niigata, self.url_kanazawa, self.url_okayama, self.url_yamaguchi, self.url_tokushima,
                           self.url_nagasaki, self.url_kumamoto, self.url_oita, self.url_ryukyu]
-        self.url_agi_ = ['https://www.football-lab.jp/y-fc/report/?year=2019&month=02&date=24', 'https://www.football-lab.jp/okay/report/?year=2019&month=02&date=24',
-                         'https://www.football-lab.jp/toku/report/?year=2019&month=02&date=24', 'https://www.football-lab.jp/oita/report/?year=2019&month=02&date=23',
-                         'https://www.football-lab.jp/ryuk/report/?year=2019&month=02&date=24']
+        self.url_agi_ = ['https://www.football-lab.jp/okay/report/?year=2019&month=02&date=24', 'https://www.football-lab.jp/toku/report/?year=2019&month=02&date=24',
+                         'https://www.football-lab.jp/oita/report/?year=2019&month=02&date=23', 'https://www.football-lab.jp/ryuk/report/?year=2019&month=02&date=24']
         self.j2_teams = ['iwte', 'send', 'aki', 'yama', 'mito', 'toch', 'gun', 'omiy', 'chib', 'tk-v',
                          'mcd', 'y-fc', 'kofu', 'niig', 'kana', 'okay', 'r-ya', 'toku', 'ngsk', 'kuma', 'oita', 'ryuk']
         self.j2_names = ['いわてグルージャ盛岡', 'ベガルタ仙台', 'ブラウブリッツ秋田', 'モンテディオ山形', '水戸ホーリーホック', '栃木ＳＣ', 'ザスパクサツ群馬',
                          '大宮アルディージャ', 'ジェフユナイテッド千葉', '東京ヴェルディ', 'ＦＣ町田ゼルビア', '横浜ＦＣ', 'ヴァンフォーレ甲府', 'アルビレックス新潟',
                          'ツエーゲン金沢', 'ファジアーノ岡山', 'レノファ山口ＦＣ', '徳島ヴォルティス', 'Ｖ・ファーレン長崎', 'ロアッソ熊本', '大分トリニータ', 'ＦＣ琉球']
 
-        self.j2_teams_ = ['y-fc', 'okay', 'toku', 'oita', 'ryuk']
-        self.j2_names_ = ['横浜ＦＣ', 'ファジアーノ岡山', '徳島ヴォルティス', '大分トリニータ', 'ＦＣ琉球']
+        self.j2_teams_ = ['okay', 'toku', 'oita', 'ryuk']
+        self.j2_names_ = ['ファジアーノ岡山', '徳島ヴォルティス', '大分トリニータ', 'ＦＣ琉球']
         self.where_league = [[1, 2, 2, 2], [1, 0, 0, 0], [1, 1, 2, 2], [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 2], [1, 1, 1, 1], [1, 1, 1, 1],
                              [1, 1, 1, 1], [1, 1, 1, 1], [1, 0, 0, 1], [1, 1, 1, 1], [1, 1, 1, 1], [
                                  1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [1, 0, 1, 1],
                              [1, 1, 1, 1], [1, 2, 2, 2], [1, 0, 0, 0], [1, 1, 1, 1]]
-        self.where_league_ = [[1, 0, 0, 1], [1, 1, 1, 1], [1, 0, 1, 1], [1, 0, 0, 0], [1, 1, 1, 1]]
+        self.where_league_ = [[1, 1, 1, 1], [1, 0, 1, 1], [1, 0, 0, 0], [1, 1, 1, 1]]
         self.j1_games = [32, 38, 34, 34]
         self.j2_games = [42, 42, 42, 42]
         self.j3_games = [30, 28, 34, 34]
@@ -382,22 +381,16 @@ class GetStats:
             # 次節に移動
             clk_next_game = driver.find_element(
                 By.XPATH, "/html/body/article/div[6]/table/tbody/tr[1]/td/ul/li[3]")
-            e = 0
             if clk_next_game.find_elements(By.TAG_NAME, 'a'):
                 if _ == 6 and d == 3:
-                    if e == 0:
-                        driver.get(
-                            "https://www.football-lab.jp/yama/report/?year=2022&month=04&date=10")
-                        e += 1
-                    elif e == 1:
-                        driver.get(
-                            "https://www.football-lab.jp/okay/report/?year=2022&month=04&date=09")
+                    driver.get(
+                        "https://www.football-lab.jp/okay/report/?year=2022&month=04&date=09")
                 else:
                     clk_next_game.click()
             else:
                 break
             time.sleep(1)
-            print(f'{n-_}, {j1}')
+            print(f'{n-_}, {j1}, {self.j2_names_[gmnm]}')
 
 
 # %%
@@ -490,12 +483,12 @@ for _ in range(5):
         if j1_or_oth[i] == 1:
             j1_flag = True
             getstts.get_header(driver, gamenum[i], j1_flag, _, d)
-            if _ == 1:
+            if _ == 0:
                 d += 1
         else:
             j1_flag = False
             getstts.get_header(driver, gamenum[i], j1_flag, _, d)
-            if _ == 1:
+            if _ == 0:
                 d += 1
     with open(f'{getstts.j2_teams_[_]}_stats_.csv', 'w', newline='') as f:
         writer = csv.writer(f)

@@ -38,14 +38,19 @@ j2_Hteams = ['iwte', 'send', 'aki', 'yama', 'mito', 'toch', 'gun', 'omiy', 'chib
              'mcd', 'y-fc', 'kofu', 'niig', 'kana', 'okay', 'r-ya', 'toku', 'ngsk', 'kuma', 'oita', 'ryuk']
 
 
-def stats_learning(team, stats_, game_num):
+def stats_learning(team, stats_, games_num):
     sc = StandardScaler()
     stats = stats_.copy()
     # 天候の要素変換は要チェック
     stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨',
                              '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴',
-                             '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷', '曇のち雨のち曇', '曇のち雷雨のち曇'], [
-        1, 1, 1, 1, 1, 0.75, 0.75, 0.75, 0.5, 0.5, 0.5, 0.75, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0, 0, 0.5, 0.5, 0, 0, 0], inplace=True)
+                             '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷',
+                             '曇のち雨のち曇', '曇のち雷雨のち曇', '雪のち曇', '曇のち雨のち晴', '曇のち雷雨のち雨', '晴のち曇一時雨',
+                             '曇時々雨のち曇', '曇一時雪', '晴のち曇時々雨', '晴時々曇一時雨', '雨のち雷雨のち雨', '雨時々雪',
+                             '雨時々雷雨のち曇', '晴のち曇のち雨', '曇時々晴一時雨', '曇のち晴一時雨'], [
+        1, 1, 1, 1, 1, 0.75, 0.75, 0.75, 0.5, 0.5, 0.5, 0.75, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+        0.25, 0.25, 0.25, 0, 0, 0.5, 0.5, 0, 0, 0, 0, 0.25, 0, 0.25, 0.25, 0.25, 0.25, 0.25, 0,
+        0, 0, 0.25, 0.25, 0.25], inplace=True)
     stats['Grass_condition'].replace(['全面良芝', '良芝', '不良'], [1.0, 0.75, 0.6], inplace=True)
     stats['Date'] = stats['Date'].str.strip('Kick Off')
     stats['Spectators'] = stats['Spectators'].str.strip('人')
@@ -105,10 +110,10 @@ def stats_learning(team, stats_, game_num):
     sc_df_x.head()
 
     # 時系列に訓練データと検証データの分割
-    train_x = sc_df_x[:game_num]
-    test_x = sc_df_x[:game_num].mean()
-    train_y = df_y[:game_num]
-    test_y = df_y[game_num]
+    train_x = sc_df_x[:games_num]
+    test_x = sc_df_x[:games_num].mean()
+    train_y = df_y[:games_num]
+    test_y = df_y[games_num]
     test_x = pd.DataFrame(test_x)
     test_x = test_x.T
 
@@ -119,10 +124,9 @@ def stats_learning(team, stats_, game_num):
     return knn_y_pred[0], test_y
 
 
-corr_num, H_pre, A_pre, F_pre = 0, 0, 0, 0
+corr_num, H_pre, A_pre, F_pre, game_num = 0, 0, 0, 0, 1
 time_start = time.time()
-for i in range(1):
-    i = 18
+for i in range(22):
     # スタッツとAGIの取得
     stats = pd.read_csv(
         f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_Hteams[i]}_stats_.csv')
@@ -131,36 +135,43 @@ for i in range(1):
     agi.drop(columns='Round', inplace=True)
     # スタッツとAGIの結合
     Hteam_stats = pd.concat([stats, agi], axis=1)
-    for j in range(21):                     # ホームでの試合数
-        for k in range(41):                 # 2022年の試合数
-            game_start = k + len(Hteam_stats['HorA']) - 41      # 試合開始地点の特定
-            if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
-                A_stats = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
-                A_agi = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
-                A_agi.drop(columns='Round', inplace=True)
-                Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
-                H_pre, H_rslt = stats_learning(
-                    j2_Hteams[i], Hteam_stats, game_start)        # ホームチームの学習
-                A_pre, A_rslt = stats_learning(
-                    j2_team[Hteam_stats.loc[game_start, "Ateam"]], Ateam_stats, game_start)    # アウェイチームの学習
-                print(f'{H_pre}\n{H_rslt}')
-                print('=----------------==----------------==----------------==----------------==----------------=')
-                print(f'{A_pre}\n{A_rslt}')
-                print('=----------------==----------------==----------------==----------------==----------------=')
-                # 最終予測
-                if H_pre == 3 and A_pre != 3:
-                    F_pre = 3
-                elif H_pre != 3 and A_pre == 3:
-                    F_pre = 0
-                else:
-                    F_pre = 1
+    hgame = 1
+    for k in range(41):                 # 2022年の試合数
+        game_start = k + len(Hteam_stats['HorA']) - 41      # 試合開始地点の特定
+        if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
+            A_stats = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
+            A_agi = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
+            A_agi.drop(columns='Round', inplace=True)
+            Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
+            """ print(f"H_stats is \n{Hteam_stats}")
+            print(f"A_stats is \n{Ateam_stats}") """
+            H_pre, H_rslt = stats_learning(
+                j2_Hteams[i], Hteam_stats, game_start)        # ホームチームの学習
+            A_pre, A_rslt = stats_learning(
+                j2_team[Hteam_stats.loc[game_start, "Ateam"]], Ateam_stats, game_start)    # アウェイチームの学習
 
-                # 最終予測が正解している数
-                if F_pre == H_rslt:
-                    corr_num += 1
+            # 最終予測
+            if H_pre == 3 and A_pre != 3:
+                F_pre = 3
+            elif H_pre != 3 and A_pre == 3:
+                F_pre = 0
+            else:
+                F_pre = 1
 
-                print(f'正解率 = {corr_num} / 462\n= {corr_num/462}%')
+            print('=----------------==----------------==----------------==----------------==----------------=')
+            print(
+                f'Round{hgame} H:{j2_Hteams[i]} A:{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}\nH prediction = {H_pre}\nH result = {H_rslt}')
+            print(f'A prediction = {A_pre}\nA result = {A_rslt}')
+            print(f"Final prediction = {F_pre}\nFinal result = {H_rslt}")
+            print('=----------------==----------------==----------------==----------------==----------------=')
+            # 最終予測が正解している数
+            if F_pre == H_rslt:
+                corr_num += 1
+
+            print(f'正解率 = {corr_num} / {game_num}\n= {corr_num/game_num*100}%')
+            game_num += 1
+            hgame += 1
 time_end = time.time()
 print(time_end - time_start)
