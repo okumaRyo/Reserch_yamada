@@ -18,6 +18,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from pathlib import Path
 from xml.dom.minicompat import defproperty
+from sklearn.feature_selection import SequentialFeatureSelector, VarianceThreshold, RFE, RFECV
+from mlxtend.feature_selection import ExhaustiveFeatureSelector as EFS
+from sklearn.ensemble import RandomForestClassifier
 
 # 外部パッケージ
 import requests
@@ -43,14 +46,21 @@ agi = pd.read_csv('/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/kofu_stats
 agi.drop(columns='Round', inplace=True)
 # スタッツとAGIの結合
 stats = pd.concat([stats, agi], axis=1)
-stats.loc[0]
+stats.info()
 
 # %%
 # stats['HorA'].replace(['A', 'H'], [0, 1], inplace=True)
 # 天候による影響度(改善の余地あり)
-stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨', '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴', '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷'], [
-                        1, 1, 1, 1, 1, 0.75, 0.75, 0.75, 0.5, 0.5, 0.5, 0.75, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0, 0, 0.5, 0.5, 0], inplace=True)
-stats['Grass_condition'].replace(['全面良芝', '良芝'], [1.0, 0.75], inplace=True)
+stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨',
+                         '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴',
+                         '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷',
+                         '曇のち雨のち曇', '曇のち雷雨のち曇', '雪のち曇', '曇のち雨のち晴', '曇のち雷雨のち雨', '晴のち曇一時雨',
+                         '曇時々雨のち曇', '曇一時雪', '晴のち曇時々雨', '晴時々曇一時雨', '雨のち雷雨のち雨', '雨時々雪',
+                         '雨時々雷雨のち曇', '晴のち曇のち雨', '曇時々晴一時雨', '曇のち晴一時雨'], [
+                        1, 1, 1, 1, 1, 0.75, 0.75, 0.75, 0.5, 0.5, 0.5, 0.75, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+                        0.25, 0.25, 0.25, 0, 0, 0.5, 0.5, 0, 0, 0, 0, 0.25, 0, 0.25, 0.25, 0.25, 0.25, 0.25, 0,
+                        0, 0, 0.25, 0.25, 0.25], inplace=True)
+stats['Grass_condition'].replace(['全面良芝', '良芝', '不良'], [1.0, 0.75, 0.6], inplace=True)
 stats['Date'] = stats['Date'].str.strip('Kick Off')
 stats['Spectators'] = stats['Spectators'].str.strip('人')
 stats['temperature'] = stats['temperature'].str.strip('℃')
@@ -70,13 +80,11 @@ stats['Chances'] = stats['Chances'].str.strip('%')
 stats['Control'] = stats['Control'].str.strip('%')
 stats['Spectators'] = stats['Spectators'].str.strip(',')
 stats.drop(columns='Round', inplace=True)
-stats.head()
+stats.info()
 
 # %%
 stats.drop(columns=['Hteam', 'Ateam', 'Date'], inplace=True)
 
-# %%
-stats.loc[0]
 
 # %%
 stats.describe()
@@ -157,14 +165,13 @@ stats['Control'] = stats['Control'].apply(lambda x: x.replace('%', '')).astype('
 # %%
 # 標準化の処理の実行（説明変数に対してのみ実行）
 sc = StandardScaler()
-
+stats.info()
 # %%
 # 欠損値の有無確認
 stats.isnull().sum()
 # %%
 # 統計データ処理に不要な特徴の削除
-drp = ['Hscore', 'Ascore', 'Shots_Success', 'WorL', 'Wether',
-       'Grass_condition', 'Intercept', 'OffSide', 'Yellow', 'Red', 'Tackle_Success']
+drp = ['Hscore', 'Ascore', 'Shots_Success', 'WorL']
 df_x = stats.drop(drp, axis=1)
 df_y = stats['WorL']
 df_x.head()
@@ -262,11 +269,20 @@ sns.scatterplot(data=stats, x="Attack_CBP", y="WorL")
 stats['WorL'].nunique
 
 # %%
+rf = RandomForestClassifier()
+# Backwardと共通関数で、Defaultがforward
+selector = RFE(rf, n_features_to_select=15)
+
+X_new = pd.DataFrame(selector.fit_transform(sc_df_x, stats['WorL']),
+                     columns=sc_df_x.columns.values[selector.get_support()])
+Cons = pd.concat([stats['WorL'], X_new], axis=1)
+Cons.head()
+# %%
 # ヒートマップ(相関図)
 plt.figure(figsize=(10, 10))
-options = {'square': True, 'annot': True, 'fmt': '0.2f', 'xticklabels': sc_df_x.columns,
-           'yticklabels': sc_df_x.columns, 'annot_kws': {'size': 5}, 'vmin': -1, 'vmax': 1, 'center': 0, 'cbar': False}
-ax = sns.heatmap(sc_df_x.corr(), **options)
+options = {'square': True, 'annot': True, 'fmt': '0.2f', 'xticklabels': Cons.columns,
+           'yticklabels': Cons.columns, 'annot_kws': {'size': 5}, 'vmin': -1, 'vmax': 1, 'center': 0, 'cbar': False}
+ax = sns.heatmap(Cons.corr(), **options)
 ax.tick_params(axis='x', labelsize=6)
 ax.tick_params(axis='y', labelsize=6)
 # %%
@@ -324,4 +340,36 @@ nt.show("tmp.html")
 display(HTML("tmp.html"))
 
 # %%
+# %%
+time_start = time.time()
+rf = RandomForestClassifier()
+# Backwardと共通関数で、Defaultがfoward
+selector = RFE(rf, n_features_to_select=25)
+
+X_new = pd.DataFrame(selector.fit_transform(df_x, stats['WorL']),
+                     columns=df_x.columns.values[selector.get_support()])
+result = pd.DataFrame(selector.get_support(), index=df_x.columns.values,
+                      columns=['False: dropped'])
+result['ranking'] = selector.ranking_
+
+print(result)
+time_end = time.time()
+print(time_end - time_start)
+# %%
+df_x.info()
+# %%
+time_start = time.time()
+rf = RandomForestClassifier()
+# Backwardと共通関数で、Defaultがfoward
+in_features_to_select = 15
+selector = RFECV(rf, min_features_to_select=in_features_to_select, cv=5)
+X_new = pd.DataFrame(selector.fit_transform(df_x, stats['WorL']),
+                     columns=df_x.columns.values[selector.get_support()])
+result = pd.DataFrame(selector.get_support(), index=df_x.columns.values,
+                      columns=['False: dropped'])
+result['ranking'] = selector.ranking_
+print(result)
+time_end = time.time()
+print(time_end - time_start)
+
 # %%

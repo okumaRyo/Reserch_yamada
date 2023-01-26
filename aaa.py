@@ -36,7 +36,6 @@ import time
 import xgboost as xgb
 import lightgbm as lgb  # LightGBM
 # import optuna.integration.lightgbm as lgb
-from multiprocessing import Process
 
 #
 # {チーム名：チーム略称名}の辞書型リストの作成
@@ -50,11 +49,11 @@ j2_Hteams = ['iwte', 'send', 'aki', 'yama', 'mito', 'toch', 'gun', 'omiy', 'chib
              'mcd', 'y-fc', 'kofu', 'niig', 'kana', 'okay', 'r-ya', 'toku', 'ngsk', 'kuma', 'oita', 'ryuk']
 
 
-def stats_learning(team, stats_, games_num, k):
+def stats_learning(team, stats_, games_num, k=9):
     sc = StandardScaler()
     stats = stats_.copy()
     # 天候の要素変換は要チェック
-    stats['WorL'].mask(stats['WorL'] == 3, 2, inplace=True)
+    stats['WorL'].mask(stats['WorL'] != 0, 1, inplace=True)
     stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨',
                              '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴',
                              '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷',
@@ -140,7 +139,7 @@ def stats_learning(team, stats_, games_num, k):
                          columns=sc_df_x.columns.values[selector.get_support()]) """
 
     # RFECV(クロスバリデーションあり)
-    """ in_features_to_select = 15
+    """ in_features_to_select = 3
     selector = RFECV(rf, min_features_to_select=in_features_to_select, cv=5)
 
     X_new = pd.DataFrame(selector.fit_transform(sc_df_x, stats['WorL']),
@@ -164,86 +163,60 @@ def stats_learning(team, stats_, games_num, k):
     test_x[0:1] = sc_df_x[games_num-5:games_num].mean()
     train_y = df_y[:games_num]
     test_y = df_y[games_num:]
+    print(test_x.head())
+    return 0, 0
     # test_x = pd.DataFrame(test_x)
     # test_x = test_x.T
 
     # ロジスティック回帰
-    if team == 2:
-        model = LogisticRegression(penalty='l2',          # 正則化項(L1正則化 or L2正則化が選択可能)
-                                   dual=False,            # Dual or primal
-                                   tol=0.0001,            # 計算を停止するための基準値
-                                   C=1.0,                 # 正則化の強さ
-                                   fit_intercept=True,    # バイアス項の計算要否
-                                   intercept_scaling=1,   # solver=‘liblinear’の際に有効なスケーリング基準値
-                                   class_weight=None,     # クラスに付与された重み
-                                   random_state=None,     # 乱数シード
-                                   solver='lbfgs',        # ハイパーパラメータ探索アルゴリズム
-                                   max_iter=100,          # 最大イテレーション数
-                                   multi_class='auto',    # クラスラベルの分類問題（2値問題の場合'auto'を指定）
-                                   verbose=0,             # liblinearおよびlbfgsがsolverに指定されている場合、冗長性のためにverboseを任意の正の数に設定
-                                   warm_start=False,      # Trueの場合、モデル学習の初期化に前の呼出情報を利用
-                                   n_jobs=None,           # 学習時に並列して動かすスレッドの数
-                                   l1_ratio=None)
-        model.fit(train_x, train_y)
-        logi_pred = model.predict(test_x)
-        return logi_pred[0], true_y
+    """ model = LogisticRegression(penalty='l2',          # 正則化項(L1正則化 or L2正則化が選択可能)
+                               dual=False,            # Dual or primal
+                               tol=0.0001,            # 計算を停止するための基準値
+                               C=1.0,                 # 正則化の強さ
+                               fit_intercept=True,    # バイアス項の計算要否
+                               intercept_scaling=1,   # solver=‘liblinear’の際に有効なスケーリング基準値
+                               class_weight=None,     # クラスに付与された重み
+                               random_state=None,     # 乱数シード
+                               solver='lbfgs',        # ハイパーパラメータ探索アルゴリズム
+                               max_iter=100,          # 最大イテレーション数
+                               multi_class='auto',    # クラスラベルの分類問題（2値問題の場合'auto'を指定）
+                               verbose=0,             # liblinearおよびlbfgsがsolverに指定されている場合、冗長性のためにverboseを任意の正の数に設定
+                               warm_start=False,      # Trueの場合、モデル学習の初期化に前の呼出情報を利用
+                               n_jobs=None,           # 学習時に並列して動かすスレッドの数
+                               l1_ratio=None)
+    model.fit(train_x, train_y)
+    logi_pred = model.predict(test_x)
+    return logi_pred[0], true_y """
 
     # LinearSVC
-    if team == 1:
-        linsvc = LinearSVC(max_iter=10000)
-        linsvc.fit(train_x, train_y)
-        linsvc_pred = linsvc.predict(test_x)
-        return linsvc_pred[0], true_y
+    """ linsvc = LinearSVC(max_iter=10000)
+    linsvc.fit(train_x, train_y)
+    linsvc_pred = linsvc.predict(test_x)
+    return linsvc_pred[0], true_y """
 
     # LightGBM
     """ params = {
         'objective': 'binary',
-        'metric': 'auc',
+        'metric': 'binary_logloss',
     }
     num_round = 100
     lgb_train = lgb.Dataset(train_x, train_y)
     lgb_eval = lgb.Dataset(test_x, test_y, reference=lgb_train)
     model = lgb.train(params, lgb_train,
                       valid_sets=[lgb_train, lgb_eval],
-                      early_stopping_rounds=50
-                      ) """
-    if team == 3:
-        params = {
-            # 最適化アルゴリズムを指定
-            'boosting': 'gbdt',
-            'metric': 'multi_error',
-            'objective': 'multiclass',
-            'num_class': 3,
-            'learning_rate': 0.01,
-            'seed': 42,
-            'verbosity': -1,
-        }
-        lgb_train = lgb.Dataset(train_x, train_y)
-        lgb_eval = lgb.Dataset(test_x, test_y, reference=lgb_train)
-        callbacks = [
-            lgb.log_evaluation(-1),
-            lgb.early_stopping(100),
-        ]
-
-        model = lgb.train(params,
-                          lgb_train,
-                          valid_sets=[lgb_train, lgb_eval],
-                          valid_names=["Train", "Test"],
-                          num_boost_round=100000,
-                          callbacks=callbacks,
-                          )
-
-        y_prob_val = model.predict(test_x, num_iteration=model.best_iteration)
-        y_pred_val = np.argmax(y_prob_val, axis=1)
-
-        return y_pred_val[0], true_y
+                      )
+    gbm_pred = model.predict(test_x)
+    if gbm_pred[0] > 0.5:
+        gbm_pred[0] = 1
+    else:
+        gbm_pred[0] = 0
+    return gbm_pred[0], true_y """
 
     # k近傍法
-    if team == 0:
-        knn = KNeighborsClassifier(n_neighbors=k)
-        knn.fit(train_x, train_y)
-        knn_y_pred = knn.predict(test_x)
-        return knn_y_pred[0], true_y
+    """ knn = KNeighborsClassifier(n_neighbors=k)
+    knn.fit(train_x, train_y)
+    knn_y_pred = knn.predict(test_x)
+    return knn_y_pred[0], true_y """
 
     """ # 勾配ブースティング
     train_pool = Pool(train_x, train_y)
@@ -259,111 +232,115 @@ def stats_learning(team, stats_, games_num, k):
     return preds[0], true_y """
 
 
-k_ = 15
-max_corr = 0
+corr_num, H_pre, A_pre, F_pre, game_num = 0, 0, 0, 0, 1
+WDL = [[0], [0], [0]]
+P_WDL = [[0], [0], [0]]
+T_WDL = [[0], [0], [0]]
+k_ = 23
 time_start = time.time()
-# while k_ < 99:
-for h in range(1):
-    h = 3
-    corr_num, H_pre, A_pre, F_pre, game_num = 0, 0, 0, 0, 0
-    WDL = [[0], [0], [0]]
-    P_WDL = [[0], [0], [0]]
-    T_WDL = [[0], [0], [0]]
-    for i in range(22):
-        # スタッツとAGIの取得
-        stats = pd.read_csv(
-            f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_Hteams[i]}_stats_.csv')
-        agi = pd.read_csv(
-            f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_Hteams[i]}_stats_agi.csv')
-        agi.drop(columns='Round', inplace=True)
-        # スタッツとAGIの結合
-        Hteam_stats = pd.concat([stats, agi], axis=1)
-        hgame = 1
-        for k in range(42):                 # 2022年の試合数
-            game_start = k + len(Hteam_stats['HorA']) - 42      # 試合開始地点の特定
-            if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
-                A_stats = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
-                A_agi = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
-                A_agi.drop(columns='Round', inplace=True)
-                Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
-                game_date = Hteam_stats.loc[game_start, 'Date']
-                A_game_start = Ateam_stats[Ateam_stats['Date'] == f'{game_date}'].index
-                """ print(f"H_stats is \n{Hteam_stats}")
-                print(f"A_stats is \n{Ateam_stats}") """
-                # print(f'Game_Date is {game_date}')
-                # print(game_start, A_game_start[0])
-                """ H_pre, H_rslt = stats_learning(
-                    j2_Hteams[i], Hteam_stats, game_start, k_)        # ホームチームの学習
-                A_pre, A_rslt = stats_learning(
-                    j2_team[Hteam_stats.loc[game_start, "Ateam"]], Ateam_stats, A_game_start[0], k_)    # アウェイチームの学習 """
-                H_pre, H_rslt = stats_learning(h, Hteam_stats, game_start, k_)        # ホームチームの学習
-                A_pre, A_rslt = stats_learning(h, Ateam_stats, A_game_start[0], k_)    # アウェイチームの学習
+for i in range(22):
+    # スタッツとAGIの取得
+    stats = pd.read_csv(
+        f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_Hteams[i]}_stats_.csv')
+    agi = pd.read_csv(
+        f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_Hteams[i]}_stats_agi.csv')
+    agi.drop(columns='Round', inplace=True)
+    # スタッツとAGIの結合
+    Hteam_stats = pd.concat([stats, agi], axis=1)
+    hgame = 1
+    for k in range(41):                 # 2022年の試合数
+        game_start = k + len(Hteam_stats['HorA']) - 41      # 試合開始地点の特定
+        if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
+            A_stats = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
+            A_agi = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
+            A_agi.drop(columns='Round', inplace=True)
+            Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
+            game_date = Hteam_stats.loc[game_start, 'Date']
+            A_game_start = Ateam_stats[Ateam_stats['Date'] == f'{game_date}'].index
+            """ print(f"H_stats is \n{Hteam_stats}")
+            print(f"A_stats is \n{Ateam_stats}") """
+            # print(f'Game_Date is {game_date}')
+            # print(game_start, A_game_start[0])
+            H_pre, H_rslt = stats_learning(
+                j2_Hteams[i], Hteam_stats, game_start, k_)        # ホームチームの学習
+            A_pre, A_rslt = stats_learning(
+                j2_team[Hteam_stats.loc[game_start, "Ateam"]], Ateam_stats, A_game_start[0], k_)    # アウェイチームの学習
 
-                if H_rslt == 2:
-                    H_rslt = 3
-                # 最終予測
-                """ if H_pre == A_pre:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
-                elif H_pre != 0 and A_pre == 0:
-                    F_pre = 3
-                    P_WDL[0][0] += 1
-                elif H_pre == 0 and A_pre != 0:
-                    F_pre = 0
-                    P_WDL[2][0] += 1
-                else:
-                    F_pre = 1
-                    P_WDL[1][0] += 1 """
+            # 最終予測
+            if H_pre == A_pre:
+                F_pre = 1
+                P_WDL[1][0] += 1
+            elif H_pre != 0 and A_pre == 0:
+                F_pre = 3
+                P_WDL[0][0] += 1
+            elif H_pre == 0 and A_pre != 0:
+                F_pre = 0
+                P_WDL[2][0] += 1
+            else:
+                F_pre = 1
+                P_WDL[1][0] += 1
 
-                if H_pre == A_pre:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
-                elif H_pre != 0 and A_pre != 3:
-                    F_pre = 3
-                    P_WDL[0][0] += 1
-                elif H_pre != 3 and A_pre != 0:
-                    F_pre = 0
-                    P_WDL[2][0] += 1
-                else:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
+            # 最終予測が正解している数
+            if F_pre == H_rslt:
+                corr_num += 1
 
-                # 最終予測が正解している数
-                if F_pre == H_rslt:
-                    corr_num += 1
+            if F_pre == 0 and H_rslt == 0:
+                WDL[2][0] += 1
+            elif F_pre == 1 and H_rslt == 1:
+                WDL[1][0] += 1
+            elif F_pre == 3 and H_rslt == 3:
+                WDL[0][0] += 1
 
-                if F_pre == 0 and H_rslt == 0:
-                    WDL[2][0] += 1
-                elif F_pre == 1 and H_rslt == 1:
-                    WDL[1][0] += 1
-                elif F_pre == 3 and H_rslt == 3:
-                    WDL[0][0] += 1
+            if H_rslt == 0:
+                T_WDL[2][0] += 1
+            elif H_rslt == 1:
+                T_WDL[1][0] += 1
+            elif H_rslt == 3:
+                T_WDL[0][0] += 1
+            game_num += 1
+            hgame += 1
+            print(game_num, i, k, H_rslt, H_pre, A_pre)
 
-                if H_rslt == 0:
-                    T_WDL[2][0] += 1
-                elif H_rslt == 1:
-                    T_WDL[1][0] += 1
-                elif H_rslt == 3:
-                    T_WDL[0][0] += 1
-                game_num += 1
-                hgame += 1
-                # print(game_num, i, k, H_rslt, H_pre, A_pre, h)
-        """ if max_corr < corr_num:
-            max_corr = corr_num
-            
-        print(k_, corr_num)
-        k_ += 2 """
-    print('=----------------==----------------==----------------==----------------==----------------=')
-    print(f'H prediction = {H_pre}')
-    print(f'A prediction = {A_pre}')
-    print(f"Final prediction = {F_pre}\nFinal result = {H_rslt}")
-    print('=----------------==----------------==----------------==----------------==----------------=')
-    print(f'k = {k_}')
-    print(
-        f'正解率 = {corr_num} / {game_num}\n= {corr_num/game_num*100}%\n(Win, Draw, Lose) = {WDL}\npred(Win, Draw, Lose) = {P_WDL}\nTrue(Win, Draw, Lose) = {T_WDL}\n正答率 = W({WDL[0][0]/P_WDL[0][0]}) D({WDL[1][0]/P_WDL[1][0]}) L({WDL[2][0]/P_WDL[2][0]})\n正答率 = W({WDL[0][0]/T_WDL[0][0]}) D({WDL[1][0]/T_WDL[1][0]}) L({WDL[2][0]/T_WDL[2][0]})')
-
+print('=----------------==----------------==----------------==----------------==----------------=')
+print(f'k = {k_}')
+print(f'H prediction = {H_pre}')
+print(f'A prediction = {A_pre}')
+print(f"Final prediction = {F_pre}\nFinal result = {H_rslt}")
+print('=----------------==----------------==----------------==----------------==----------------=')
+print(
+    f'正解率 = {corr_num} / {game_num}\n= {corr_num/game_num*100}%\n(Win, Draw, Lose) = {WDL}\npred(Win, Draw, Lose) = {P_WDL}\nTrue(Win, Draw, Lose) = {T_WDL}\n正答率 = W({WDL[0][0]/P_WDL[0][0]}) D({WDL[1][0]/P_WDL[1][0]}) L({WDL[2][0]/P_WDL[2][0]})\n正答率 = W({WDL[0][0]/T_WDL[0][0]}) D({WDL[1][0]/T_WDL[1][0]}) L({WDL[2][0]/T_WDL[2][0]})')
 
 time_end = time.time()
 print(f"{time_end - time_start}秒")
+
+'solver': trial.suggest_categorical('solver', ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga']),
+            # 正則化の強さを指定（0.0001から10まで）
+            'C': trial.suggest_loguniform('C', 0.0001, 10),
+            # 最大反復回数（＊ソルバーが収束するまで）
+            'max_iter': trial.suggest_int('max_iter', 100, 100000)
+            model = LogisticRegression(**params)
+
+        # 評価指標として正解率の最大化を目指す
+        scores = cross_validate(model,
+                                X=self.train_x,
+                                y=self.train_y,
+                                scoring='accuracy',  # 正解率を指定（https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter）
+                                n_jobs=-1)  # 並行して実行するジョブの数（-1は全てのプロセッサを使用）
+        return scores['test_score'].mean()
+    
+    def Logistic(self, solver, C, max_iter):
+    self.solver = solver
+        self.C = C
+        self.max_iter = max_iter
+        model = LogisticRegression(
+            # ハイパーパラメータ探索で特定した値を設定
+            solver=self.solver,
+            C=self.C,
+            max_iter=self.max_iter
+        )
+
+        model.fit(self.train_x, self.train_y)
+        pred = model.predict(self.test_x)
+        return pred[0], self.true_y

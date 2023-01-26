@@ -1,33 +1,14 @@
 # Python標準モジュール
-from IPython.display import HTML
-from pyvis.network import Network
-import networkx as nx
-from sklearn.metrics import recall_score
-from sklearn.metrics import precision_score
-from sklearn.metrics import accuracy_score
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report
-from operator import index
-from sklearn import svm
-from sklearn import linear_model
-from sklearn.metrics import r2_score            # 決定係数
-from sklearn.metrics import mean_squared_error
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from pathlib import Path
-from xml.dom.minicompat import defproperty
 from sklearn.feature_selection import SequentialFeatureSelector, VarianceThreshold, RFE, RFECV
-from mlxtend.feature_selection import ExhaustiveFeatureSelector as EFS
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import LinearSVC
 from catboost import Pool, CatBoostClassifier
 from sklearn.decomposition import PCA
-from scipy.sparse.csgraph import connected_components
 from umap import UMAP
 from sklearn.linear_model import LogisticRegression
 # 外部パッケージ
-import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,6 +19,11 @@ import lightgbm as lgb  # LightGBM
 # import optuna.integration.lightgbm as lgb
 from multiprocessing import Process
 
+
+corr_num, H_pre, A_pre, F_pre, game_num = 0, 0, 0, 0, 1
+WDL = [[0], [0], [0]]
+P_WDL = [[0], [0], [0]]
+T_WDL = [[0], [0], [0]]
 #
 # {チーム名：チーム略称名}の辞書型リストの作成
 #
@@ -54,7 +40,7 @@ def stats_learning(team, stats_, games_num, k):
     sc = StandardScaler()
     stats = stats_.copy()
     # 天候の要素変換は要チェック
-    stats['WorL'].mask(stats['WorL'] == 3, 2, inplace=True)
+    # stats['WorL'].mask(stats['WorL'] != 0, 1, inplace=True)
     stats['Wether'].replace(['晴', '屋内', '晴時々曇', '晴のち曇', '晴一時曇', '曇時々晴', '曇のち晴', '曇一時晴', '晴時々雨',
                              '晴のち雨', '晴一時雨', '曇', '曇時々雨', '曇のち雨', '曇一時雨', '雨時々晴', '雨のち晴', '雨一時晴',
                              '雨時々曇', '雨のち曇', '雨一時曇', '雨', '曇のち雷雨時々晴', '曇時々雪', '雪', '曇時々雨一時雷',
@@ -186,14 +172,14 @@ def stats_learning(team, stats_, games_num, k):
                                    l1_ratio=None)
         model.fit(train_x, train_y)
         logi_pred = model.predict(test_x)
-        return logi_pred[0], true_y
+        return logi_pred[0], true_y, 'Logistic'
 
     # LinearSVC
     if team == 1:
         linsvc = LinearSVC(max_iter=10000)
         linsvc.fit(train_x, train_y)
         linsvc_pred = linsvc.predict(test_x)
-        return linsvc_pred[0], true_y
+        return linsvc_pred[0], true_y, 'LinearSVC'
 
     # LightGBM
     """ params = {
@@ -208,42 +194,21 @@ def stats_learning(team, stats_, games_num, k):
                       early_stopping_rounds=50
                       ) """
     if team == 3:
-        params = {
-            # 最適化アルゴリズムを指定
-            'boosting': 'gbdt',
-            'metric': 'multi_error',
-            'objective': 'multiclass',
-            'num_class': 3,
-            'learning_rate': 0.01,
-            'seed': 42,
-            'verbosity': -1,
-        }
-        lgb_train = lgb.Dataset(train_x, train_y)
-        lgb_eval = lgb.Dataset(test_x, test_y, reference=lgb_train)
-        callbacks = [
-            lgb.log_evaluation(-1),
-            lgb.early_stopping(100),
-        ]
-
-        model = lgb.train(params,
-                          lgb_train,
-                          valid_sets=[lgb_train, lgb_eval],
-                          valid_names=["Train", "Test"],
-                          num_boost_round=100000,
-                          callbacks=callbacks,
-                          )
-
-        y_prob_val = model.predict(test_x, num_iteration=model.best_iteration)
-        y_pred_val = np.argmax(y_prob_val, axis=1)
-
-        return y_pred_val[0], true_y
+        model = lgb.LGBMClassifier()
+        model.fit(train_x, train_y)
+        gbm_pred = model.predict(test_x)
+        """ if gbm_pred[0] > 0.5:
+            gbm_pred[0] = 1
+        else:
+            gbm_pred[0] = 0 """
+        return gbm_pred[0], true_y, 'LightGBM'
 
     # k近傍法
     if team == 0:
         knn = KNeighborsClassifier(n_neighbors=k)
         knn.fit(train_x, train_y)
         knn_y_pred = knn.predict(test_x)
-        return knn_y_pred[0], true_y
+        return knn_y_pred[0], true_y, 'Kneighbors'
 
     """ # 勾配ブースティング
     train_pool = Pool(train_x, train_y)
@@ -259,111 +224,95 @@ def stats_learning(team, stats_, games_num, k):
     return preds[0], true_y """
 
 
-k_ = 15
-max_corr = 0
-time_start = time.time()
-# while k_ < 99:
-for h in range(1):
-    h = 3
-    corr_num, H_pre, A_pre, F_pre, game_num = 0, 0, 0, 0, 0
-    WDL = [[0], [0], [0]]
-    P_WDL = [[0], [0], [0]]
-    T_WDL = [[0], [0], [0]]
+def split_main(corr_num, H_pre, A_pre, F_pre, game_num, WDL_, P_WDL_, T_WDL_, start):
+    # i = start
     for i in range(22):
-        # スタッツとAGIの取得
-        stats = pd.read_csv(
-            f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_Hteams[i]}_stats_.csv')
-        agi = pd.read_csv(
-            f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_Hteams[i]}_stats_agi.csv')
-        agi.drop(columns='Round', inplace=True)
-        # スタッツとAGIの結合
-        Hteam_stats = pd.concat([stats, agi], axis=1)
-        hgame = 1
-        for k in range(42):                 # 2022年の試合数
-            game_start = k + len(Hteam_stats['HorA']) - 42      # 試合開始地点の特定
-            if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
-                A_stats = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
-                A_agi = pd.read_csv(
-                    f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
-                A_agi.drop(columns='Round', inplace=True)
-                Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
-                game_date = Hteam_stats.loc[game_start, 'Date']
-                A_game_start = Ateam_stats[Ateam_stats['Date'] == f'{game_date}'].index
-                """ print(f"H_stats is \n{Hteam_stats}")
-                print(f"A_stats is \n{Ateam_stats}") """
-                # print(f'Game_Date is {game_date}')
-                # print(game_start, A_game_start[0])
-                """ H_pre, H_rslt = stats_learning(
-                    j2_Hteams[i], Hteam_stats, game_start, k_)        # ホームチームの学習
-                A_pre, A_rslt = stats_learning(
-                    j2_team[Hteam_stats.loc[game_start, "Ateam"]], Ateam_stats, A_game_start[0], k_)    # アウェイチームの学習 """
-                H_pre, H_rslt = stats_learning(h, Hteam_stats, game_start, k_)        # ホームチームの学習
-                A_pre, A_rslt = stats_learning(h, Ateam_stats, A_game_start[0], k_)    # アウェイチームの学習
+        if i < 22:
+            # スタッツとAGIの取得
+            stats = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_Hteams[i]}_stats_.csv')
+            agi = pd.read_csv(
+                f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_Hteams[i]}_stats_agi.csv')
+            agi.drop(columns='Round', inplace=True)
+            # スタッツとAGIの結合
+            Hteam_stats = pd.concat([stats, agi], axis=1)
+            hgame = 1
+            for k in range(42):                 # 2022年の試合数
+                game_start = k + len(Hteam_stats['HorA']) - 42      # 試合開始地点の特定
+                if Hteam_stats.loc[game_start, 'HorA'] == 1:        # ホームでの試合の場合，以前の試合を学習
+                    A_stats = pd.read_csv(
+                        f'/Users/okumaryo/Class/Laboratory/Twitter/J2_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_.csv')
+                    A_agi = pd.read_csv(
+                        f'/Users/okumaryo/Class/Laboratory/Twitter/AGI_stats/{j2_team[Hteam_stats.loc[game_start, "Ateam"]]}_stats_agi.csv')
+                    A_agi.drop(columns='Round', inplace=True)
+                    Ateam_stats = pd.concat([A_stats, A_agi], axis=1)
+                    game_date = Hteam_stats.loc[game_start, 'Date']
+                    A_game_start = Ateam_stats[Ateam_stats['Date'] == f'{game_date}'].index
 
-                if H_rslt == 2:
-                    H_rslt = 3
-                # 最終予測
-                """ if H_pre == A_pre:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
-                elif H_pre != 0 and A_pre == 0:
-                    F_pre = 3
-                    P_WDL[0][0] += 1
-                elif H_pre == 0 and A_pre != 0:
-                    F_pre = 0
-                    P_WDL[2][0] += 1
-                else:
-                    F_pre = 1
-                    P_WDL[1][0] += 1 """
+                    H_pre, H_rslt, Alg = stats_learning(
+                        start, Hteam_stats, game_start, 15)        # ホームチームの学習
+                    A_pre, A_rslt, ppp = stats_learning(
+                        start, Ateam_stats, A_game_start[0], 15)    # アウェイチームの学習
 
-                if H_pre == A_pre:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
-                elif H_pre != 0 and A_pre != 3:
-                    F_pre = 3
-                    P_WDL[0][0] += 1
-                elif H_pre != 3 and A_pre != 0:
-                    F_pre = 0
-                    P_WDL[2][0] += 1
-                else:
-                    F_pre = 1
-                    P_WDL[1][0] += 1
+                    if H_pre == A_pre:
+                        F_pre = 1
+                        P_WDL[1][0] += 1
+                    elif H_pre != 0 and A_pre != 3:
+                        F_pre = 3
+                        P_WDL[0][0] += 1
+                    elif H_pre != 3 and A_pre != 0:
+                        F_pre = 0
+                        P_WDL[2][0] += 1
+                    else:
+                        F_pre = 1
+                        P_WDL[1][0] += 1
 
-                # 最終予測が正解している数
-                if F_pre == H_rslt:
-                    corr_num += 1
+                    # 最終予測が正解している数
+                    if F_pre == H_rslt:
+                        corr_num += 1
 
-                if F_pre == 0 and H_rslt == 0:
-                    WDL[2][0] += 1
-                elif F_pre == 1 and H_rslt == 1:
-                    WDL[1][0] += 1
-                elif F_pre == 3 and H_rslt == 3:
-                    WDL[0][0] += 1
+                    if F_pre == 0 and H_rslt == 0:
+                        WDL[2][0] += 1
+                    elif F_pre == 1 and H_rslt == 1:
+                        WDL[1][0] += 1
+                    elif F_pre == 3 and H_rslt == 3:
+                        WDL[0][0] += 1
 
-                if H_rslt == 0:
-                    T_WDL[2][0] += 1
-                elif H_rslt == 1:
-                    T_WDL[1][0] += 1
-                elif H_rslt == 3:
-                    T_WDL[0][0] += 1
-                game_num += 1
-                hgame += 1
-                # print(game_num, i, k, H_rslt, H_pre, A_pre, h)
-        """ if max_corr < corr_num:
-            max_corr = corr_num
-            
-        print(k_, corr_num)
-        k_ += 2 """
-    print('=----------------==----------------==----------------==----------------==----------------=')
-    print(f'H prediction = {H_pre}')
-    print(f'A prediction = {A_pre}')
-    print(f"Final prediction = {F_pre}\nFinal result = {H_rslt}")
-    print('=----------------==----------------==----------------==----------------==----------------=')
-    print(f'k = {k_}')
+                    if H_rslt == 0:
+                        T_WDL[2][0] += 1
+                    elif H_rslt == 1:
+                        T_WDL[1][0] += 1
+                    elif H_rslt == 3:
+                        T_WDL[0][0] += 1
+                    game_num += 1
+                    hgame += 1
+                    #print(game_num, i, k, H_rslt, H_pre, A_pre)
+        #i += 4
+    print(f'multi_task = {start}\n{Alg}')
     print(
         f'正解率 = {corr_num} / {game_num}\n= {corr_num/game_num*100}%\n(Win, Draw, Lose) = {WDL}\npred(Win, Draw, Lose) = {P_WDL}\nTrue(Win, Draw, Lose) = {T_WDL}\n正答率 = W({WDL[0][0]/P_WDL[0][0]}) D({WDL[1][0]/P_WDL[1][0]}) L({WDL[2][0]/P_WDL[2][0]})\n正答率 = W({WDL[0][0]/T_WDL[0][0]}) D({WDL[1][0]/T_WDL[1][0]}) L({WDL[2][0]/T_WDL[2][0]})')
 
+    # return 2, 4, np.array([[1], [2], [3]]), np.array([[10], [20], [30]]), np.array([[11], [21], [13]])
 
-time_end = time.time()
-print(f"{time_end - time_start}秒")
+
+if __name__ == '__main__':
+    k_ = 15
+    max_corr = 0
+    time_start = time.time()
+    # while k_ < 99:
+    for h in range(1):
+        workers = [Process(target=split_main, args=(
+            0, 0, 0, 0, 0, [[0], [0], [0]], [[0], [0], [0]], [[0], [0], [0]], i)) for i in range(4)]
+        for work in workers:
+            work.start()
+        for worker in workers:
+            worker.join()
+            """ corr_num_, game_num_, WDL_, P_WDL_, T_WDL_ = work.start()
+            corr_num += corr_num_
+            game_num += game_num_
+            WDL += WDL_
+            P_WDL += P_WDL_
+            T_WDL += T_WDL_ """
+
+    time_end = time.time()
+    print(f"{time_end - time_start}秒")
